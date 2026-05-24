@@ -5,23 +5,31 @@ namespace App\Http\Controllers\Api\V1\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
-use App\Services\Auth\AuthService;
+use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 
 class RegisterController extends Controller
 {
-    public function __invoke(RegisterRequest $request, AuthService $authService): JsonResponse
+    public function __invoke(RegisterRequest $request): JsonResponse
     {
-        $credentials = $request->safe()->only(['name', 'email', 'password']);
-        $result = $authService->register($credentials, $request->input('device_name'));
+        $user = User::query()->create($request->validated());
 
-        $user = $result['user']->load(['roles.permissions', 'permissions']);
+        $customerRole = Role::query()->where('slug', 'customer')->orWhere('name', 'customer')->first();
+
+        if ($customerRole !== null) {
+            $user->roles()->syncWithoutDetaching([$customerRole->id]);
+        }
+
+        $token = $user->createToken($request->input('device_name', 'web'))->plainTextToken;
+
+        $user->load(['roles.permissions', 'permissions']);
 
         return response()->json([
             'success' => true,
             'message' => 'Registration successful.',
             'data' => [
-                'token' => $result['token'],
+                'token' => $token,
                 'token_type' => 'Bearer',
                 'user' => new UserResource($user),
             ],
