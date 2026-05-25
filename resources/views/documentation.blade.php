@@ -70,6 +70,7 @@
 
         .header-subtitle {
             font-size: 1.1rem;
+            color: var(--color-primary-light);
             opacity: 0.95;
             margin-bottom: calc(var(--spacing-unit) * 1.5);
         }
@@ -442,7 +443,7 @@
                     </div>
                     <div class="header-meta-item">
                         <span class="header-meta-label">Type</span>
-                        <span class="header-meta-value">RESTful API</span>
+                        <span class="header-meta-value">RESTfull API</span>
                     </div>
                     <div class="header-meta-item">
                         <span class="header-meta-label">Framework</span>
@@ -506,7 +507,7 @@
                         <h2>Project Overview</h2>
                         <p><strong>Project Name:</strong> E-Commerce Backend Laravel</p>
                         <p><strong>Version:</strong> 1.0.0</p>
-                        <p><strong>Type:</strong> RESTful API Backend</p>
+                        <p><strong>Type:</strong> RESTfull API Backend</p>
 
                         <p>This is a comprehensive Laravel-based REST API designed to support a full-featured e-commerce platform with user authentication, product catalog management, shopping cart functionality, order management, and payment processing capabilities.</p>
 
