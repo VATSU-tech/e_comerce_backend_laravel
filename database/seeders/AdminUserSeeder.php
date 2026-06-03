@@ -2,35 +2,31 @@
 
 namespace Database\Seeders;
 
-use App\Models\Role;
 use App\Models\User;
+use App\Models\Role;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 class AdminUserSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        $adminRole = Role::where('slug', 'admin')->first();
-
-        if (! $adminRole) {
-            $this->command->warn('Admin role not found. Run RoleSeeder before AdminUserSeeder.');
-            return;
-        }
+        $adminRole = Role::firstOrCreate([
+            'slug' => 'admin'
+        ], [
+            'name' => 'Administrator'
+        ]);
 
         $admin = User::firstOrCreate(
-            ['email' => 'admin@ecommerce.com'],
+            ['email' => 'admin@example.com'],
             [
                 'name' => 'Super Admin',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('password123')
             ]
         );
 
-        if (! $admin->roles()->where('role_id', $adminRole->id)->exists()) {
-            $admin->roles()->attach($adminRole->id);
-        }
+        $admin->roles()->syncWithoutDetaching([
+            $adminRole->id
+        ]);
     }
 }
