@@ -461,6 +461,7 @@
                 <li><a href="#technical-stack">Stack</a></li>
                 <li><a href="#api-endpoints">Endpoints</a></li>
                 <li><a href="#authentication">Auth</a></li>
+                <li><a href="#admin-authorization">Admin RBAC</a></li>
                 <li><a href="#database-schema">Database</a></li>
                 <li><a href="#data-models">Models</a></li>
                 <li><a href="#development-guidelines">Guidelines</a></li>
@@ -483,6 +484,7 @@
                         <div class="sidebar-title">API Reference</div>
                         <a href="#api-endpoints" class="sidebar-link">Endpoints</a>
                         <a href="#authentication" class="sidebar-link">Authentication</a>
+                        <a href="#admin-authorization" class="sidebar-link">Admin RBAC</a>
                         <a href="#api-response-format" class="sidebar-link">Responses</a>
                         <a href="#error-handling" class="sidebar-link">Errors</a>
                     </div>
@@ -514,7 +516,8 @@
                         <div class="info-box">
                             <strong>Key Features:</strong>
                             <ul>
-                                <li>Secure user authentication and authorization</li>
+                                <li>Secure user authentication and role-based authorization</li>
+                                <li>Admin-only back-office access for product and category management</li>
                                 <li>Comprehensive product catalog management</li>
                                 <li>Shopping cart functionality</li>
                                 <li>Order processing and management</li>
@@ -582,13 +585,18 @@ e_comerce_backend_laravel/
 │   │   │   │   ├── MeController.php
 │   │   │   │   └── RegisterController.php
 │   │   │   ├── CartController.php
+│   │   │   ├── CategoryController.php
 │   │   │   ├── OrderController.php
 │   │   │   ├── PaymentController.php
 │   │   │   └── ProductController.php
+│   │   ├── Middleware/
+│   │   │   └── EnsureAdmin.php
+│   │   ├── Policies/
+│   │   │   ├── CategoryPolicy.php
+│   │   │   └── ProductPolicy.php
 │   │   ├── Requests/
-│   │   ├── Resources/
-│   │   └── Middleware/
-│   ├── Models/ (24 models)
+│   │   └── Resources/
+│   ├── Models/ (21 models)
 │   ├── Repositories/
 │   ├── Services/
 │   └── Providers/
@@ -597,7 +605,7 @@ e_comerce_backend_laravel/
 │   ├── web.php
 │   └── console.php
 ├── database/
-│   ├── migrations/ (20 migrations)
+│   ├── migrations/ (28 migrations)
 │   ├── factories/
 │   └── seeders/
 ├── config/
@@ -616,7 +624,9 @@ e_comerce_backend_laravel/
                         <ul>
                             <li><code>app/</code> - Application source code</li>
                             <li><code>app/Http/Controllers/</code> - API request handlers</li>
-                            <li><code>app/Models/</code> - Eloquent data models (24 total)</li>
+                            <li><code>app/Http/Middleware/EnsureAdmin.php</code> - Admin-only route guard</li>
+                            <li><code>app/Policies/</code> - Product and category authorization policies</li>
+                            <li><code>app/Models/</code> - Eloquent data models (21 total)</li>
                             <li><code>app/Repositories/</code> - Data access layer</li>
                             <li><code>app/Services/</code> - Business logic layer</li>
                             <li><code>routes/</code> - Route definitions</li>
@@ -631,7 +641,7 @@ e_comerce_backend_laravel/
                         <h2>Database Schema</h2>
 
                         <div class="info-box">
-                            The database consists of 20 core tables with relationships organized around user management, product catalog, inventory, orders, payments, and shipments.
+                            The database consists of migrations for core tables with relationships organized around user management, product catalog, inventory, orders, payments, and shipments.
                         </div>
 
                         <h3>Core Tables</h3>
@@ -706,6 +716,11 @@ e_comerce_backend_laravel/
                         <div class="code-box">
                             <pre>http://localhost:8000/api/v1</pre>
                         </div>
+                        <p>All endpoint paths below are relative to <code>/api/v1</code>.</p>
+
+                        <div class="warning-box">
+                            <strong>Frontend rule:</strong> state-changing catalog and back-office routes require a Sanctum token for a user with the <code>admin</code> role. A customer/non-admin receives HTTP <code>403</code>.
+                        </div>
 
                         <h3>Authentication Endpoints</h3>
 
@@ -719,7 +734,26 @@ Request Body:
   "name": "John Doe",
   "email": "john@example.com",
   "password": "password123",
+  "password_confirmation": "password123",
   "device_name": "web"
+}
+
+Response 201:
+{
+  "success": true,
+  "message": "Registration successful.",
+  "data": {
+    "token": "1|plain-text-token",
+    "token_type": "Bearer",
+    "user": {
+      "id": 1,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "customer",
+      "roles": [{ "id": 2, "name": "Customer", "slug": "customer" }],
+      "permissions": []
+    }
+  }
 }</pre>
                         </div>
 
@@ -730,62 +764,221 @@ Content-Type: application/json
 
 Request Body:
 {
-  "email": "john@example.com",
-  "password": "password123"
+  "email": "admin@ecommerce.com",
+  "password": "password123",
+  "device_name": "web"
+}
+
+Response 200:
+{
+  "success": true,
+  "message": "Login successful.",
+  "data": {
+    "token": "1|plain-text-token",
+    "token_type": "Bearer",
+    "user": {
+      "id": 1,
+      "name": "Super Admin",
+      "email": "admin@ecommerce.com",
+      "role": "admin",
+      "roles": [{ "id": 1, "name": "Admin", "slug": "admin" }],
+      "permissions": [
+        { "id": 1, "name": "Products Create", "slug": "products.create" },
+        { "id": 2, "name": "Products Update", "slug": "products.update" },
+        { "id": 3, "name": "Products Delete", "slug": "products.delete" },
+        { "id": 4, "name": "Categories Create", "slug": "categories.create" },
+        { "id": 5, "name": "Categories Update", "slug": "categories.update" },
+        { "id": 6, "name": "Categories Delete", "slug": "categories.delete" },
+        { "id": 7, "name": "Orders Manage", "slug": "orders.manage" },
+        { "id": 8, "name": "Payments Manage", "slug": "payments.manage" },
+        { "id": 9, "name": "Users Manage", "slug": "users.manage" },
+        { "id": 10, "name": "Admin Access", "slug": "admin.access" },
+        { "id": 11, "name": "Protected Routes Access", "slug": "protected-routes.access" }
+      ]
+    }
+  }
 }</pre>
                         </div>
 
                         <h4>Logout User</h4>
                         <div class="code-box">
                             <pre>POST /auth/logout
-Authorization: Bearer {token}</pre>
+Authorization: Bearer {token}
+
+Response 200:
+{
+  "success": true,
+  "message": "Logout successful."
+}</pre>
                         </div>
 
                         <h4>Get Current User</h4>
                         <div class="code-box">
                             <pre>GET /auth/me
-Authorization: Bearer {token}</pre>
+Authorization: Bearer {token}
+
+Response 200:
+{
+  "success": true,
+  "message": "Authenticated user profile.",
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "Super Admin",
+      "email": "admin@ecommerce.com",
+      "role": "admin",
+      "roles": [{ "id": 1, "name": "Admin", "slug": "admin" }],
+      "permissions": [{ "id": 1, "name": "Products Create", "slug": "products.create" }]
+    }
+  }
+}</pre>
                         </div>
 
                         <h3>Product Endpoints</h3>
 
                         <h4>List Products</h4>
                         <div class="code-box">
-                            <pre>GET /products?category_id=1&q=search&limit=20
-Authorization: Optional</pre>
+                            <pre>GET /products?category_id=1&amp;q=search&amp;limit=20
+Authorization: Optional
+
+Response 200: Laravel paginated product collection.</pre>
                         </div>
 
                         <h4>Get Product</h4>
                         <div class="code-box">
                             <pre>GET /products/{id}
-Authorization: Optional</pre>
+Authorization: Optional
+
+Response 200: product with category, images and variants.</pre>
                         </div>
 
-                        <h4>Create Product</h4>
+                        <h4>Create Product — Admin only</h4>
                         <div class="code-box">
                             <pre>POST /products
-Authorization: Bearer {token}
+Authorization: Bearer {admin_token}
+Content-Type: application/json
 
 Request Body:
 {
   "category_id": 1,
   "name": "New Product",
   "slug": "new-product",
+  "description": "Product description",
   "price": 99.99,
-  "sku": "SKU123"
-}</pre>
+  "sku": "SKU123",
+  "is_active": true
+}
+
+Required permission: products.create
+Response 201: product JSON</pre>
                         </div>
 
-                        <h4>Update Product</h4>
+                        <h4>Update Product — Admin only</h4>
                         <div class="code-box">
                             <pre>PUT /products/{id}
-Authorization: Bearer {token}</pre>
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+
+Request Body accepts partial fields:
+{
+  "category_id": 1,
+  "name": "Updated Product",
+  "slug": "updated-product",
+  "description": "Updated description",
+  "price": 109.99,
+  "sku": "SKU123-UPDATED",
+  "is_active": true
+}
+
+Required permission: products.update
+Response 200: updated product JSON</pre>
                         </div>
 
-                        <h4>Delete Product</h4>
+                        <h4>Delete Product — Admin only</h4>
                         <div class="code-box">
                             <pre>DELETE /products/{id}
-Authorization: Bearer {token}</pre>
+Authorization: Bearer {admin_token}
+
+Required permission: products.delete
+Response 204: No Content</pre>
+                        </div>
+
+                        <h3>Category Endpoints</h3>
+
+                        <h4>List Categories</h4>
+                        <div class="code-box">
+                            <pre>GET /categories
+Authorization: Optional
+
+Response 200: paginated categories with children.</pre>
+                        </div>
+
+                        <h4>Get Category</h4>
+                        <div class="code-box">
+                            <pre>GET /categories/{id}
+Authorization: Optional
+
+Response 200: category with parent and children.</pre>
+                        </div>
+
+                        <h4>Create Category — Admin only</h4>
+                        <div class="code-box">
+                            <pre>POST /categories
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+
+Request Body:
+{
+  "name": "Shoes",
+  "slug": "shoes",
+  "parent_id": null
+}
+
+Required permission: categories.create
+Response 201: category JSON</pre>
+                        </div>
+
+                        <h4>Update Category — Admin only</h4>
+                        <div class="code-box">
+                            <pre>PUT /categories/{id}
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+
+Request Body accepts partial fields:
+{
+  "name": "Premium Shoes",
+  "slug": "premium-shoes",
+  "parent_id": null
+}
+
+Required permission: categories.update
+Response 200: updated category JSON</pre>
+                        </div>
+
+                        <h4>Delete Category — Admin only</h4>
+                        <div class="code-box">
+                            <pre>DELETE /categories/{id}
+Authorization: Bearer {admin_token}
+
+Required permission: categories.delete
+Response 204: No Content</pre>
+                        </div>
+
+                        <h3>Admin Catch-All Routes</h3>
+                        <div class="code-box">
+                            <pre>GET    /admin/{path}
+POST   /admin/{path}
+PUT    /admin/{path}
+DELETE /admin/{path}
+Authorization: Bearer {admin_token}
+
+Current placeholder response:
+{
+  "success": true,
+  "message": "Admin route access granted.",
+  "method": "GET",
+  "path": "api/v1/admin/dashboard"
+}</pre>
                         </div>
 
                         <h3>Cart Endpoints</h3>
@@ -793,19 +986,24 @@ Authorization: Bearer {token}</pre>
                         <h4>Get Cart</h4>
                         <div class="code-box">
                             <pre>GET /cart
-Authorization: Bearer {token}</pre>
+Authorization: Bearer {token}
+
+Response 200: cart with items.</pre>
                         </div>
 
                         <h4>Add to Cart</h4>
                         <div class="code-box">
                             <pre>POST /cart/items
 Authorization: Bearer {token}
+Content-Type: application/json
 
 Request Body:
 {
-  "product_id": 1,
+  "product_variant_id": 1,
   "quantity": 2
-}</pre>
+}
+
+Response 201: cart item JSON</pre>
                         </div>
 
                         <h3>Order Endpoints</h3>
@@ -819,7 +1017,13 @@ Authorization: Bearer {token}</pre>
                         <h4>Create Order</h4>
                         <div class="code-box">
                             <pre>POST /orders
-Authorization: Bearer {token}</pre>
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Request Body:
+{
+  "total": 299.99
+}</pre>
                         </div>
 
                         <h4>Get Order</h4>
@@ -839,19 +1043,35 @@ Authorization: Bearer {token}</pre>
                         <h4>Initiate Payment</h4>
                         <div class="code-box">
                             <pre>POST /payments/initiate
-Authorization: Bearer {token}</pre>
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Request Body:
+{
+  "order_id": 1,
+  "payment_method_id": 1,
+  "amount": 299.99
+}</pre>
                         </div>
 
                         <h4>Confirm Payment</h4>
                         <div class="code-box">
                             <pre>POST /payments/confirm
-Authorization: Bearer {token}</pre>
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Request Body:
+{
+  "transaction_reference": "txn_123456"
+}</pre>
                         </div>
 
                         <h4>Payment Webhook</h4>
                         <div class="code-box">
                             <pre>POST /payments/webhook
-Content-Type: application/json</pre>
+Content-Type: application/json
+
+Request body: provider-specific payload.</pre>
                         </div>
                     </section>
 
@@ -860,26 +1080,31 @@ Content-Type: application/json</pre>
                         <h2>Authentication</h2>
 
                         <h3>Method: Laravel Sanctum Token Authentication</h3>
-
                         <p>The API uses token-based authentication via Laravel Sanctum for secure API access.</p>
 
                         <h3>How It Works</h3>
                         <ol>
-                            <li>User registers or logs in</li>
-                            <li>Server generates an API token</li>
-                            <li>Client includes token in Authorization header: <code>Authorization: Bearer {token}</code></li>
-                            <li>Server validates token for protected routes</li>
+                            <li>User registers or logs in.</li>
+                            <li>Server generates an API token.</li>
+                            <li>Client stores the token securely and sends it in the <code>Authorization: Bearer {token}</code> header.</li>
+                            <li>The backend validates the Sanctum token on protected routes.</li>
+                            <li>The frontend uses <code>user.role</code>, <code>user.roles[*].slug</code>, and <code>user.permissions[*].slug</code> from login or <code>/auth/me</code> to toggle UI access.</li>
                         </ol>
 
                         <h3>Protected Routes</h3>
-                        <p>All routes under <code>middleware('auth:sanctum')</code> require valid authentication token.</p>
+                        <ul>
+                            <li>Customer/user routes require <code>auth:sanctum</code>.</li>
+                            <li>Product/category mutations and <code>/admin/*</code> require <code>auth:sanctum</code> plus the <code>admin</code> middleware.</li>
+                            <li>Authorization is enforced server-side by middleware and policies; frontend checks are for UX only.</li>
+                        </ul>
 
                         <h3>Security Measures</h3>
                         <ul>
-                            <li>Tokens can be revoked per device</li>
-                            <li>Password hashing using Bcrypt</li>
-                            <li>CSRF protection on state-changing operations</li>
-                            <li>Rate limiting on login endpoints (throttle:login)</li>
+                            <li>Tokens can be revoked per device.</li>
+                            <li>Passwords are hashed by Laravel.</li>
+                            <li>Login is rate-limited with <code>throttle:login</code>.</li>
+                            <li>Product and category mutations are checked through Laravel Policies.</li>
+                            <li>Non-admin users receive <code>403 Forbidden</code> on admin-only endpoints.</li>
                         </ul>
 
                         <div class="info-box">
@@ -888,6 +1113,94 @@ Content-Type: application/json</pre>
                                 <pre>Authorization: Bearer 1|abcdef123456ghijklmnopqrstuvwxyz</pre>
                             </div>
                         </div>
+                    </section>
+
+                    <!-- Admin Authorization -->
+                    <section id="admin-authorization">
+                        <h2>Admin Authorization &amp; Frontend Contract</h2>
+
+                        <h3>Seeded Super Administrator</h3>
+                        <p>Run <code>php artisan db:seed</code> to create the super administrator and RBAC records.</p>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Name</td><td><code>Super Admin</code></td></tr>
+                                <tr><td>Email</td><td><code>admin@ecommerce.com</code></td></tr>
+                                <tr><td>Password</td><td><code>password123</code></td></tr>
+                                <tr><td>Primary role</td><td><code>admin</code></td></tr>
+                            </tbody>
+                        </table>
+                        <p>Any persisted user whose email is exactly <code>admin@ecommerce.com</code> is automatically attached to the <code>admin</code> role when that role exists.</p>
+
+                        <h3>Seeded Roles</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Role slug</th>
+                                    <th>Frontend use</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>admin</code></td><td>Full back-office access and all current permissions.</td></tr>
+                                <tr><td><code>customer</code></td><td>Default buyer account; no catalog/admin mutation access.</td></tr>
+                                <tr><td><code>seller</code></td><td>Reserved for future marketplace features.</td></tr>
+                                <tr><td><code>manager</code></td><td>Reserved for future delegated back-office features.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Seeded Permissions</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Permission slug</th>
+                                    <th>Meaning</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>products.create</code></td><td>Create products.</td></tr>
+                                <tr><td><code>products.update</code></td><td>Update products.</td></tr>
+                                <tr><td><code>products.delete</code></td><td>Delete products.</td></tr>
+                                <tr><td><code>categories.create</code></td><td>Create categories.</td></tr>
+                                <tr><td><code>categories.update</code></td><td>Update categories.</td></tr>
+                                <tr><td><code>categories.delete</code></td><td>Delete categories.</td></tr>
+                                <tr><td><code>orders.manage</code></td><td>Future order administration.</td></tr>
+                                <tr><td><code>payments.manage</code></td><td>Future payment administration.</td></tr>
+                                <tr><td><code>users.manage</code></td><td>Future user administration.</td></tr>
+                                <tr><td><code>admin.access</code></td><td>Access admin/back-office routes.</td></tr>
+                                <tr><td><code>protected-routes.access</code></td><td>Access protected administration routes.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Frontend Access Matrix</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>Admin</th>
+                                    <th>Customer/anonymous</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>View product list/details</td><td>Yes</td><td>Yes</td></tr>
+                                <tr><td>Create/update/delete products</td><td>Yes</td><td>No (<code>403</code>)</td></tr>
+                                <tr><td>View category list/details</td><td>Yes</td><td>Yes</td></tr>
+                                <tr><td>Create/update/delete categories</td><td>Yes</td><td>No (<code>403</code>)</td></tr>
+                                <tr><td><code>/admin/*</code> routes</td><td>Yes</td><td>No (<code>403</code> or <code>401</code>)</td></tr>
+                                <tr><td>Cart/order/payment user flows</td><td>Authenticated user</td><td>Authenticated user</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Recommended Frontend Checks</h3>
+                        <div class="code-box">
+                            <pre>const isAdmin = user?.roles?.some((role) =&gt; role.slug === 'admin') || user?.role === 'admin';
+const canCreateProducts = user?.permissions?.some((permission) =&gt; permission.slug === 'products.create');</pre>
+                        </div>
+                        <p>Use these checks only to show/hide UI. Always expect the API to be the source of truth for authorization.</p>
                     </section>
 
                     <!-- Installation and Setup -->

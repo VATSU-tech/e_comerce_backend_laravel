@@ -12,28 +12,22 @@ class UserResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $roles = $this->whenLoaded('roles');
-        $userPermissions = $this->whenLoaded('permissions');
+        $this->resource->loadMissing(['roles.permissions', 'permissions']);
 
-        $permissionsFromRoles = collect($roles)
-            ->flatMap(fn ($role) => $role->permissions ?? collect())
-            ->unique('id')
-            ->values();
+        $roles = $this->roles->map(fn ($role) => [
+            'id' => $role->id,
+            'name' => $role->name,
+            'slug' => $role->slug,
+        ])->values();
 
-        $permissions = collect($userPermissions)
-            ->merge($permissionsFromRoles)
-            ->unique('id')
-            ->values();
+        $permissions = $this->resource->allPermissions();
 
         return [
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
-            'roles' => collect($roles)->map(fn ($role) => [
-                'id' => $role->id,
-                'name' => $role->name,
-                'slug' => $role->slug,
-            ])->values(),
+            'role' => $roles->first()['slug'] ?? null,
+            'roles' => $roles,
             'permissions' => $permissions->map(fn ($permission) => [
                 'id' => $permission->id,
                 'name' => $permission->name,
