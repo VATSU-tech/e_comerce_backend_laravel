@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -11,22 +11,19 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        $adminRole = Role::firstOrCreate([
-            'slug' => 'admin'
-        ], [
-            'name' => 'Administrator'
-        ]);
+        $adminRole = Role::query()->firstOrCreate(
+            ['slug' => 'admin'],
+            ['name' => 'Admin']
+        );
 
-        $admin = User::firstOrCreate(
-            ['email' => 'admin@example.com'],
+        $admin = User::query()->updateOrCreate(
+            ['email' => User::ADMIN_EMAIL],
             [
                 'name' => 'Super Admin',
-                'password' => Hash::make('password123')
+                'password' => Hash::make('password123'),
             ]
         );
 
-        $admin->roles()->syncWithoutDetaching([
-            $adminRole->id
-        ]);
+        $admin->roles()->syncWithoutDetaching([$adminRole->id]);
     }
 }

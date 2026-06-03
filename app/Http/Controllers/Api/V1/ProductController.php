@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
 use App\Repositories\ProductRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,8 @@ class ProductController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $this->authorize('create', Product::class);
+
         $product = $this->productRepository->create($request->validate([
             'category_id' => ['required', 'integer', 'exists:categories,id'],
             'name' => ['required', 'string'],
@@ -43,6 +46,8 @@ class ProductController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $product = $this->productRepository->findOrFail($id);
+
+        $this->authorize('update', $product);
         $updated = $this->productRepository->update($product, $request->validate([
             'category_id' => ['sometimes', 'integer', 'exists:categories,id'],
             'name' => ['sometimes', 'string'],
@@ -59,6 +64,9 @@ class ProductController extends Controller
     public function destroy(int $id): JsonResponse
     {
         $product = $this->productRepository->findOrFail($id);
+
+        $this->authorize('delete', $product);
+
         $this->productRepository->delete($product);
 
         return response()->json([], 204);

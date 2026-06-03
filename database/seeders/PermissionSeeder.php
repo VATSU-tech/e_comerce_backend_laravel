@@ -3,7 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\Permission;
+use App\Models\Role;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class PermissionSeeder extends Seeder
 {
@@ -13,22 +15,33 @@ class PermissionSeeder extends Seeder
     public function run(): void
     {
         $permissions = [
-            'manage_users',
-            'manage_products',
-            'manage_orders',
-            'manage_inventory',
-            'view_orders',
-            'create_orders',
+            'products.create',
+            'products.update',
+            'products.delete',
+            'categories.create',
+            'categories.update',
+            'categories.delete',
+            'orders.manage',
+            'payments.manage',
+            'users.manage',
+            'admin.access',
+            'protected-routes.access',
         ];
 
-        foreach ($permissions as $perm) {
-            Permission::updateOrCreate(
-                ['slug' => $perm],
+        foreach ($permissions as $permission) {
+            Permission::query()->updateOrCreate(
+                ['slug' => $permission],
                 [
-                    'name' => ucfirst(str_replace('_', ' ', $perm)),
-                    'slug' => $perm,
+                    'name' => Str::headline(str_replace('.', ' ', $permission)),
+                    'slug' => $permission,
                 ]
             );
+        }
+
+        $adminRole = Role::query()->where('slug', 'admin')->first();
+
+        if ($adminRole !== null) {
+            $adminRole->permissions()->sync(Permission::query()->pluck('id'));
         }
     }
 }

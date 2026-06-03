@@ -25,6 +25,8 @@ class LoginController extends Controller
             ], 422);
         }
 
+        $user->assignAdminRoleWhenEligible();
+
         $token = $user->createToken($request->input('device_name', 'web'))->plainTextToken;
 
         $user->load(['roles.permissions', 'permissions']);
