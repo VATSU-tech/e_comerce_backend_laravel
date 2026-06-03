@@ -8,12 +8,13 @@
 4. [Database Schema](#database-schema)
 5. [API Endpoints](#api-endpoints)
 6. [Authentication](#authentication)
-7. [Installation and Setup](#installation-and-setup)
-8. [Configuration](#configuration)
-9. [Data Models](#data-models)
-10. [API Response Format](#api-response-format)
-11. [Error Handling](#error-handling)
-12. [Development Guidelines](#development-guidelines)
+7. [Admin Authorization & Frontend Contract](#admin-authorization--frontend-contract)
+8. [Installation and Setup](#installation-and-setup)
+9. [Configuration](#configuration)
+10. [Data Models](#data-models)
+11. [API Response Format](#api-response-format)
+12. [Error Handling](#error-handling)
+13. [Development Guidelines](#development-guidelines)
 
 ---
 
@@ -72,10 +73,16 @@ e_comerce_backend_laravel/
 │   │   │   │       │   ├── MeController.php
 │   │   │   │       │   └── RegisterController.php
 │   │   │   │       ├── CartController.php
+│   │   │   │       ├── CategoryController.php
 │   │   │   │       ├── OrderController.php
 │   │   │   │       ├── PaymentController.php
 │   │   │   │       └── ProductController.php
 │   │   │   └── Controller.php
+│   │   ├── Middleware/
+│   │   │   └── EnsureAdmin.php
+│   │   ├── Policies/
+│   │   │   ├── CategoryPolicy.php
+│   │   │   └── ProductPolicy.php
 │   │   ├── Requests/
 │   │   │   └── Api/
 │   │   │       └── V1/
@@ -161,7 +168,7 @@ users
 roles
 ├── id (Primary Key)
 ├── name (String)
-├── slug (String)
+├── slug (String, Unique)
 ├── created_at (Timestamp)
 └── updated_at (Timestamp)
 ```
@@ -171,7 +178,7 @@ roles
 permissions
 ├── id (Primary Key)
 ├── name (String)
-├── slug (String)
+├── slug (String, Unique)
 ├── created_at (Timestamp)
 └── updated_at (Timestamp)
 ```
@@ -181,9 +188,8 @@ permissions
 categories
 ├── id (Primary Key)
 ├── name (String)
-├── slug (String)
-├── description (Text, Nullable)
-├── is_active (Boolean)
+├── slug (String, Unique)
+├── parent_id (Foreign Key → categories, Nullable)
 ├── created_at (Timestamp)
 └── updated_at (Timestamp)
 ```
@@ -196,7 +202,7 @@ products
 ├── name (String)
 ├── slug (String)
 ├── description (Text, Nullable)
-├── price (Decimal 8,2)
+├── price (Decimal 10,2)
 ├── sku (String, Unique)
 ├── is_active (Boolean)
 ├── created_at (Timestamp)
@@ -268,7 +274,7 @@ cart_items
 ├── cart_id (Foreign Key → carts)
 ├── product_id (Foreign Key → products)
 ├── quantity (Integer)
-├── price (Decimal 8,2)
+├── price (Decimal 10,2)
 ├── created_at (Timestamp)
 └── updated_at (Timestamp)
 ```
@@ -301,7 +307,7 @@ order_items
 ├── order_id (Foreign Key → orders)
 ├── product_id (Foreign Key → products)
 ├── quantity (Integer)
-├── price (Decimal 8,2)
+├── price (Decimal 10,2)
 ├── created_at (Timestamp)
 └── updated_at (Timestamp)
 ```
@@ -365,18 +371,29 @@ shipments
 ## API Endpoints
 
 ### Base URL
-```
+```text
 http://localhost:8000/api/v1
 ```
+
+All endpoint paths below are relative to `/api/v1`.
+
+### Frontend Auth Rules
+
+- Send protected requests with `Authorization: Bearer {token}`.
+- Login is rate-limited with the `throttle:login` middleware.
+- State-changing admin catalog routes require both a valid Sanctum token and the `admin` role.
+- A forbidden customer/non-admin request returns HTTP `403`.
 
 ### Authentication Endpoints
 
 #### Register User
-```
+```http
 POST /auth/register
 Content-Type: application/json
+```
 
 Request:
+```json
 {
   "name": "John Doe",
   "email": "john@example.com",
@@ -384,54 +401,102 @@ Request:
   "password_confirmation": "password123",
   "device_name": "web"
 }
+```
 
-Response (201):
+Response `201`:
+```json
 {
   "success": true,
   "message": "Registration successful.",
   "data": {
-    "token": "1|Bearer...",
+    "token": "1|plain-text-token",
     "token_type": "Bearer",
     "user": {
       "id": 1,
       "name": "John Doe",
       "email": "john@example.com",
-      "roles": []
+      "role": "customer",
+      "roles": [
+        { "id": 2, "name": "Customer", "slug": "customer" }
+      ],
+      "permissions": [],
+      "created_at": "2026-06-03T00:00:00.000000Z",
+      "updated_at": "2026-06-03T00:00:00.000000Z"
     }
   }
 }
 ```
 
 #### Login User
-```
+```http
 POST /auth/login
 Content-Type: application/json
+```
 
 Request:
+```json
 {
-  "email": "john@example.com",
+  "email": "admin@ecommerce.com",
   "password": "password123",
   "device_name": "web"
 }
+```
 
-Response (200):
+Response `200` for the seeded administrator:
+```json
 {
   "success": true,
   "message": "Login successful.",
   "data": {
-    "token": "1|Bearer...",
+    "token": "1|plain-text-token",
     "token_type": "Bearer",
-    "user": { ... }
+    "user": {
+      "id": 1,
+      "name": "Super Admin",
+      "email": "admin@ecommerce.com",
+      "role": "admin",
+      "roles": [
+        { "id": 1, "name": "Admin", "slug": "admin" }
+      ],
+      "permissions": [
+        { "id": 1, "name": "Products Create", "slug": "products.create" },
+        { "id": 2, "name": "Products Update", "slug": "products.update" },
+        { "id": 3, "name": "Products Delete", "slug": "products.delete" },
+        { "id": 4, "name": "Categories Create", "slug": "categories.create" },
+        { "id": 5, "name": "Categories Update", "slug": "categories.update" },
+        { "id": 6, "name": "Categories Delete", "slug": "categories.delete" },
+        { "id": 7, "name": "Orders Manage", "slug": "orders.manage" },
+        { "id": 8, "name": "Payments Manage", "slug": "payments.manage" },
+        { "id": 9, "name": "Users Manage", "slug": "users.manage" },
+        { "id": 10, "name": "Admin Access", "slug": "admin.access" },
+        { "id": 11, "name": "Protected Routes Access", "slug": "protected-routes.access" }
+      ],
+      "created_at": "2026-06-03T00:00:00.000000Z",
+      "updated_at": "2026-06-03T00:00:00.000000Z"
+    }
+  }
+}
+```
+
+Response `422` for invalid credentials:
+```json
+{
+  "success": false,
+  "message": "Invalid credentials.",
+  "errors": {
+    "email": ["The provided credentials are incorrect."]
   }
 }
 ```
 
 #### Logout User
-```
+```http
 POST /auth/logout
 Authorization: Bearer {token}
+```
 
-Response (200):
+Response `200`:
+```json
 {
   "success": true,
   "message": "Logout successful."
@@ -439,41 +504,60 @@ Response (200):
 ```
 
 #### Get Current User
-```
+```http
 GET /auth/me
 Authorization: Bearer {token}
+```
 
-Response (200):
+Response `200`:
+```json
 {
-  "id": 1,
-  "name": "John Doe",
-  "email": "john@example.com",
-  "roles": [],
-  "permissions": []
+  "success": true,
+  "message": "Authenticated user profile.",
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "Super Admin",
+      "email": "admin@ecommerce.com",
+      "role": "admin",
+      "roles": [
+        { "id": 1, "name": "Admin", "slug": "admin" }
+      ],
+      "permissions": [
+        { "id": 1, "name": "Products Create", "slug": "products.create" }
+      ],
+      "created_at": "2026-06-03T00:00:00.000000Z",
+      "updated_at": "2026-06-03T00:00:00.000000Z"
+    }
+  }
 }
 ```
 
 ### Product Endpoints
 
 #### List Products
-```
+```http
 GET /products?category_id=1&q=search&limit=20
-Authorization: Optional (Bearer {token})
+Authorization: Optional
+```
 
-Response (200):
+Response `200` uses Laravel pagination:
+```json
 {
-  "data": [...],
-  "links": { "first": "", "last": "", "prev": null, "next": null },
-  "meta": { "current_page": 1, "from": 1, "path": "", "per_page": 20, "to": 20, "total": 100 }
+  "data": [],
+  "links": { "first": "...", "last": "...", "prev": null, "next": null },
+  "meta": { "current_page": 1, "per_page": 20, "total": 0 }
 }
 ```
 
 #### Get Product Details
-```
+```http
 GET /products/{id}
 Authorization: Optional
+```
 
-Response (200):
+Response `200`:
+```json
 {
   "id": 1,
   "category_id": 1,
@@ -483,18 +567,21 @@ Response (200):
   "price": "99.99",
   "sku": "SKU123",
   "is_active": true,
-  "images": [...],
-  "variants": [...]
+  "category": {},
+  "images": [],
+  "variants": []
 }
 ```
 
-#### Create Product
-```
+#### Create Product — Admin only
+```http
 POST /products
-Authorization: Bearer {token}
+Authorization: Bearer {admin_token}
 Content-Type: application/json
+```
 
 Request:
+```json
 {
   "category_id": 1,
   "name": "New Product",
@@ -504,196 +591,236 @@ Request:
   "sku": "SKU123",
   "is_active": true
 }
-
-Response (201):
-{ ... product data ... }
 ```
 
-#### Update Product
-```
+Required permission: `products.create`. Response `201`: product JSON.
+
+#### Update Product — Admin only
+```http
 PUT /products/{id}
-Authorization: Bearer {token}
+Authorization: Bearer {admin_token}
 Content-Type: application/json
+```
+
+Request accepts any subset of:
+```json
+{
+  "category_id": 1,
+  "name": "Updated Product",
+  "slug": "updated-product",
+  "description": "Updated description",
+  "price": 109.99,
+  "sku": "SKU123-UPDATED",
+  "is_active": true
+}
+```
+
+Required permission: `products.update`. Response `200`: updated product JSON.
+
+#### Delete Product — Admin only
+```http
+DELETE /products/{id}
+Authorization: Bearer {admin_token}
+```
+
+Required permission: `products.delete`. Response `204`: no content.
+
+### Category Endpoints
+
+#### List Categories
+```http
+GET /categories
+Authorization: Optional
+```
+
+Response `200`: paginated categories with `children`.
+
+#### Get Category Details
+```http
+GET /categories/{id}
+Authorization: Optional
+```
+
+Response `200`: category with `parent` and `children`.
+
+#### Create Category — Admin only
+```http
+POST /categories
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+```
 
 Request:
-{ ... (same fields as create, partial update allowed) ... }
-
-Response (200):
-{ ... updated product data ... }
+```json
+{
+  "name": "Shoes",
+  "slug": "shoes",
+  "parent_id": null
+}
 ```
 
-#### Delete Product
-```
-DELETE /products/{id}
-Authorization: Bearer {token}
+Required permission: `categories.create`. Response `201`: category JSON.
 
-Response (204): No Content
+#### Update Category — Admin only
+```http
+PUT /categories/{id}
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+```
+
+Request accepts any subset of:
+```json
+{
+  "name": "Premium Shoes",
+  "slug": "premium-shoes",
+  "parent_id": null
+}
+```
+
+Required permission: `categories.update`. Response `200`: updated category JSON.
+
+#### Delete Category — Admin only
+```http
+DELETE /categories/{id}
+Authorization: Bearer {admin_token}
+```
+
+Required permission: `categories.delete`. Response `204`: no content.
+
+### Admin Catch-All Routes
+
+These routes are reserved for future back-office screens and must only be called with an admin token:
+
+```http
+GET /admin/{path}
+POST /admin/{path}
+PUT /admin/{path}
+DELETE /admin/{path}
+Authorization: Bearer {admin_token}
+```
+
+Current placeholder response `200`:
+```json
+{
+  "success": true,
+  "message": "Admin route access granted.",
+  "method": "GET",
+  "path": "api/v1/admin/dashboard"
+}
 ```
 
 ### Cart Endpoints
 
 #### Get Cart
-```
+```http
 GET /cart
 Authorization: Bearer {token}
-
-Response (200):
-{
-  "id": 1,
-  "user_id": 1,
-  "items": [
-    {
-      "id": 1,
-      "product_id": 1,
-      "quantity": 2,
-      "price": "99.99"
-    }
-  ]
-}
 ```
+
+Response `200`: cart JSON with `items`.
 
 #### Add to Cart
-```
+```http
 POST /cart/items
 Authorization: Bearer {token}
 Content-Type: application/json
+```
 
 Request:
+```json
 {
-  "product_id": 1,
+  "product_variant_id": 1,
   "quantity": 2
 }
-
-Response (201):
-{ ... cart item data ... }
 ```
+
+Response `201`: cart item JSON.
 
 ### Order Endpoints
 
 #### List Orders
-```
+```http
 GET /orders
 Authorization: Bearer {token}
-
-Response (200):
-[
-  {
-    "id": 1,
-    "user_id": 1,
-    "order_status_id": 1,
-    "total": "299.99",
-    "items": [...],
-    "status": { ... }
-  }
-]
 ```
+
+Response `200`: authenticated user's orders.
 
 #### Create Order
-```
+```http
 POST /orders
 Authorization: Bearer {token}
 Content-Type: application/json
+```
 
 Request:
+```json
 {
-  "items": [
-    {
-      "product_id": 1,
-      "quantity": 2
-    }
-  ]
+  "total": 299.99
 }
-
-Response (201):
-{ ... order data ... }
 ```
+
+Response `201`: order JSON.
 
 #### Get Order Details
-```
+```http
 GET /orders/{id}
 Authorization: Bearer {token}
-
-Response (200):
-{ ... order data with items and shipments ... }
 ```
+
+Response `200`: order JSON for the authenticated user.
 
 #### Cancel Order
-```
+```http
 PATCH /orders/{id}/cancel
 Authorization: Bearer {token}
-
-Response (200):
-{
-  "success": true,
-  "message": "Order cancelled successfully.",
-  "data": { ... updated order ... }
-}
 ```
+
+Response `200`: updated/cancelled order payload.
 
 ### Payment Endpoints
 
 #### Initiate Payment
-```
+```http
 POST /payments/initiate
 Authorization: Bearer {token}
 Content-Type: application/json
+```
 
 Request:
+```json
 {
   "order_id": 1,
   "payment_method_id": 1,
   "amount": 299.99
 }
-
-Response (200):
-{
-  "success": true,
-  "data": {
-    "payment_id": 1,
-    "status": "PENDING",
-    "redirect_url": "https://payment-provider.com/..."
-  }
-}
 ```
+
+Response `201`: initiated payment payload.
 
 #### Confirm Payment
-```
+```http
 POST /payments/confirm
 Authorization: Bearer {token}
 Content-Type: application/json
+```
 
 Request:
+```json
 {
-  "payment_id": 1,
-  "transaction_id": "txn_123456"
-}
-
-Response (200):
-{
-  "success": true,
-  "message": "Payment confirmed successfully.",
-  "data": { ... payment data ... }
+  "transaction_reference": "txn_123456"
 }
 ```
+
+Response `200`: confirmed payment payload.
 
 #### Payment Webhook
-```
+```http
 POST /payments/webhook
 Content-Type: application/json
-
-Request:
-{
-  "event": "payment.completed",
-  "payment_id": 1,
-  "transaction_id": "txn_123456"
-}
-
-Response (200):
-{
-  "success": true,
-  "message": "Webhook processed successfully."
-}
 ```
+
+Request body: provider-specific payload. Response `200`: webhook handling payload.
 
 ---
 
@@ -701,25 +828,97 @@ Response (200):
 
 ### Method: Laravel Sanctum Token Authentication
 
-#### How It Works
-1. User registers or logs in
-2. Server generates an API token
-3. Client includes token in Authorization header: `Authorization: Bearer {token}`
-4. Server validates token for protected routes
+The API uses token-based authentication via Laravel Sanctum for secure API access.
 
-#### Protected Routes
-All routes under `middleware('auth:sanctum')` require valid authentication token.
+### How It Works
 
-#### Token Format
-- Type: Bearer Token
-- Generated by: Laravel Sanctum
-- Device Name: Optional identifier for token source (web, mobile, etc.)
+1. User registers or logs in.
+2. Server generates an API token.
+3. Client stores the token securely and sends it in `Authorization: Bearer {token}`.
+4. Server validates the Sanctum token on protected routes.
+5. The frontend should use `user.role`, `user.roles[*].slug`, and `user.permissions[*].slug` from `/auth/login` or `/auth/me` to toggle UI access.
 
-#### Security Measures
-- Tokens can be revoked per device
-- Password hashing using Bcrypt
-- CSRF protection on state-changing operations
-- Rate limiting on login endpoints (throttle:login)
+### Protected Routes
+
+- Customer/user routes: require `auth:sanctum`.
+- Admin mutation/back-office routes: require `auth:sanctum` and the `admin` middleware.
+- Admin authorization is enforced server-side by middleware and policies; hiding buttons in the frontend is only a UX improvement.
+
+### Security Measures
+
+- Tokens can be revoked per device.
+- Passwords are hashed with Laravel's built-in hashing.
+- Login is rate-limited with `throttle:login`.
+- Product and category mutations are checked through Laravel Policies.
+- Non-admin users receive `403 Forbidden` on admin-only endpoints.
+
+---
+
+## Admin Authorization & Frontend Contract
+
+### Seeded Super Administrator
+
+Run the database seeders to create the super administrator:
+
+```bash
+php artisan db:seed
+```
+
+Seeded credentials:
+
+| Field | Value |
+| --- | --- |
+| Name | `Super Admin` |
+| Email | `admin@ecommerce.com` |
+| Password | `password123` |
+| Primary role | `admin` |
+
+The application also automatically attaches the `admin` role to any persisted user whose email is exactly `admin@ecommerce.com`, provided the role exists.
+
+### Seeded Roles
+
+| Role slug | Intended frontend use |
+| --- | --- |
+| `admin` | Full back-office access and all current permissions. |
+| `customer` | Default buyer account; no catalog/admin mutation access. |
+| `seller` | Reserved for future marketplace features. |
+| `manager` | Reserved for future delegated back-office features. |
+
+### Seeded Permissions
+
+| Permission slug | Meaning |
+| --- | --- |
+| `products.create` | Create products. |
+| `products.update` | Update products. |
+| `products.delete` | Delete products. |
+| `categories.create` | Create categories. |
+| `categories.update` | Update categories. |
+| `categories.delete` | Delete categories. |
+| `orders.manage` | Future order administration. |
+| `payments.manage` | Future payment administration. |
+| `users.manage` | Future user administration. |
+| `admin.access` | Access admin/back-office routes. |
+| `protected-routes.access` | Access protected administration routes. |
+
+### Frontend Access Matrix
+
+| Feature | Admin | Customer/anonymous |
+| --- | --- | --- |
+| View product list/details | Yes | Yes |
+| Create/update/delete products | Yes | No (`403`) |
+| View category list/details | Yes | Yes |
+| Create/update/delete categories | Yes | No (`403`) |
+| `/admin/*` routes | Yes | No (`403` or `401`) |
+| Cart/order/payment user flows | Authenticated user | Authenticated user |
+
+### Recommended Frontend Checks
+
+```ts
+const isAdmin = user?.roles?.some((role) => role.slug === 'admin') || user?.role === 'admin';
+const canCreateProducts = user?.permissions?.some((permission) => permission.slug === 'products.create');
+```
+
+Use these checks only to show/hide UI. Always expect the API to be the source of truth for authorization.
 
 ---
 
@@ -875,6 +1074,12 @@ CACHE_DRIVER=file
 - `addresses()` - One-to-Many with Address
 - `carts()` - One-to-Many with Cart
 - `permissions()` - Many-to-Many with Permission
+
+**Authorization helpers:**
+- `hasRole(string $role)` - checks role by slug/name
+- `hasPermissionTo(string $permission)` - checks direct and role permissions by slug/name
+- `allPermissions()` - returns aggregated direct and role permissions
+- `assignAdminRoleWhenEligible()` - attaches `admin` to `admin@ecommerce.com` when the role exists
 
 **Traits:**
 - HasFactory - Factory support
