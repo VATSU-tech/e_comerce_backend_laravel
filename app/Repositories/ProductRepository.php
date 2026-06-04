@@ -10,6 +10,7 @@ class ProductRepository
     public function paginate(array $filters = [], int $perPage = 20): LengthAwarePaginator
     {
         return Product::query()
+            ->with(['category', 'primaryImage'])
             ->when(isset($filters['category_id']), fn ($query) => $query->where('category_id', $filters['category_id']))
             ->when(isset($filters['q']), fn ($query) => $query->where('name', 'like', '%'.$filters['q'].'%'))
             ->latest()
@@ -18,14 +19,27 @@ class ProductRepository
 
     public function findOrFail(int $id): Product
     {
-        return Product::query()->with(['category', 'images', 'variants'])->findOrFail($id);
+        return Product::query()
+            ->with([
+                'category',
+                'images' => fn ($query) => $query->orderByDesc('is_primary')->oldest(),
+                'primaryImage',
+                'variants',
+            ])
+            ->findOrFail($id);
     }
 
+    /**
+     * @param array<string, mixed> $data
+     */
     public function create(array $data): Product
     {
         return Product::query()->create($data);
     }
 
+    /**
+     * @param array<string, mixed> $data
+     */
     public function update(Product $product, array $data): Product
     {
         $product->update($data);

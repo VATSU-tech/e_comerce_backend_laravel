@@ -3,15 +3,24 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\Products\DeleteProductImageRequest;
+use App\Http\Requests\Api\V1\Products\SetPrimaryProductImageRequest;
+use App\Http\Requests\Api\V1\Products\StoreProductImagesRequest;
+use App\Http\Requests\Api\V1\Products\StoreProductRequest;
+use App\Http\Requests\Api\V1\Products\UpdateProductRequest;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Repositories\ProductRepository;
+use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    public function __construct(private readonly ProductRepository $productRepository)
-    {
+    public function __construct(
+        private readonly ProductRepository $productRepository,
+        private readonly ProductService $productService,
+    ) {
     }
 
     public function index(Request $request): JsonResponse
@@ -21,54 +30,55 @@ class ProductController extends Controller
         return response()->json($products);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreProductRequest $request): JsonResponse
     {
-        $this->authorize('create', Product::class);
-
-        $product = $this->productRepository->create($request->validate([
-            'category_id' => ['required', 'integer', 'exists:categories,id'],
-            'name' => ['required', 'string'],
-            'slug' => ['required', 'string', 'unique:products,slug'],
-            'description' => ['nullable', 'string'],
-            'price' => ['required', 'numeric', 'min:0'],
-            'sku' => ['required', 'string', 'unique:products,sku'],
-            'is_active' => ['sometimes', 'boolean'],
-        ]));
+        $product = $this->productService->create($request->validated());
 
         return response()->json($product, 201);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Product $product): JsonResponse
     {
-        return response()->json($this->productRepository->findOrFail($id));
+        return response()->json($this->productRepository->findOrFail($product->id));
     }
 
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateProductRequest $request, Product $product): JsonResponse
     {
-        $product = $this->productRepository->findOrFail($id);
-
-        $this->authorize('update', $product);
-        $updated = $this->productRepository->update($product, $request->validate([
-            'category_id' => ['sometimes', 'integer', 'exists:categories,id'],
-            'name' => ['sometimes', 'string'],
-            'slug' => ['sometimes', 'string', 'unique:products,slug,'.$id],
-            'description' => ['nullable', 'string'],
-            'price' => ['sometimes', 'numeric', 'min:0'],
-            'sku' => ['sometimes', 'string', 'unique:products,sku,'.$id],
-            'is_active' => ['sometimes', 'boolean'],
-        ]));
+        $updated = $this->productService->update($product, $request->validated());
 
         return response()->json($updated);
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroy(Product $product): JsonResponse
     {
-        $product = $this->productRepository->findOrFail($id);
-
         $this->authorize('delete', $product);
 
         $this->productRepository->delete($product);
 
         return response()->json([], 204);
+    }
+
+    public function storeImages(StoreProductImagesRequest $request, Product $product): JsonResponse
+    {
+        $validated = $request->validated();
+        $updated = $this->productService->addImages(
+            $product,
+            $validated['images'],
+            isset($validated['primary_image_index']) ? (int) $validated['primary_image_index'] : null,
+        );
+
+        return response()->json($updated, 201);
+    }
+
+    public function destroyImage(DeleteProductImageRequest $request, Product $product, ProductImage $image): JsonResponse
+    {
+        $this->productService->deleteImage($product, $image);
+
+        return response()->json([], 204);
+    }
+
+    public function setPrimaryImage(SetPrimaryProductImageRequest $request, Product $product, ProductImage $image): JsonResponse
+    {
+        return response()->json($this->productService->setPrimaryImage($product, $image));
     }
 }
