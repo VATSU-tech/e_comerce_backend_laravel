@@ -903,6 +903,82 @@ Required permission: products.delete
 Response 204: No Content</pre>
                         </div>
 
+                        <h3>Product Image Endpoints</h3>
+
+                        <h4>Upload Product Images — Admin only</h4>
+                        <div class="code-box">
+                            <pre>POST /products/{product_id}/images
+Authorization: Bearer {admin_token}
+Content-Type: multipart/form-data
+
+Upload one or more images to an existing product.
+
+Form data:
+  - images[0]: <image file>
+  - images[1]: <image file>
+  - primary_image_index: 0 (optional, which image becomes primary)
+
+Response 201:
+  Returns product JSON with updated images array.
+  Each image includes: id, image_path, image_url, is_primary
+
+Required permission: products.create or products.update</pre>
+                        </div>
+
+                        <h4>Delete Product Image — Admin only</h4>
+                        <div class="code-box">
+                            <pre>DELETE /products/{product_id}/images/{image_id}
+Authorization: Bearer {admin_token}
+
+Delete a single product image.
+
+Response 204: No Content
+
+Required permission: products.delete</pre>
+                        </div>
+
+                        <h4>Set Primary Product Image — Admin only</h4>
+                        <div class="code-box">
+                            <pre>PATCH /products/{product_id}/images/{image_id}/primary
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+
+Mark a specific image as the primary/featured image.
+
+Request body:
+{
+  "is_primary": true
+}
+
+Response 200: Returns the updated image object
+
+Required permission: products.update</pre>
+                        </div>
+
+                        <h4>Include Images When Creating Product</h4>
+                        <div class="code-box">
+                            <pre>POST /products
+Authorization: Bearer {admin_token}
+Content-Type: multipart/form-data
+
+Create a product with images in a single transaction.
+
+Form data:
+  - category_id: 1
+  - name: Laptop
+  - slug: laptop
+  - price: 999.99
+  - sku: LAP-001
+  - is_active: true
+  - images[0]: <image file>
+  - images[1]: <image file>
+  - primary_image_index: 1 (optional)
+
+Response 201: Product JSON with images included
+
+The first image becomes primary if primary_image_index is not specified.</pre>
+                        </div>
+
                         <h3>Category Endpoints</h3>
 
                         <h4>List Categories</h4>

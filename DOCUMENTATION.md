@@ -625,6 +625,140 @@ Authorization: Bearer {admin_token}
 
 Required permission: `products.delete`. Response `204`: no content.
 
+### Product Image Endpoints
+
+#### Upload Product Images — Admin only
+```http
+POST /products/{product_id}/images
+Authorization: Bearer {admin_token}
+Content-Type: multipart/form-data
+```
+
+Upload one or more images to an existing product. The first uploaded image automatically becomes primary if no `primary_image_index` is specified.
+
+Request:
+```
+Files:
+  - images[0]: <binary image data> (JPEG, PNG, WebP, etc.)
+  - images[1]: <binary image data>
+  - ...
+
+Optional parameters:
+  - primary_image_index: 0 (integer, index of which uploaded image should be marked primary)
+```
+
+Response `201`:
+```json
+{
+  "id": 1,
+  "category_id": 1,
+  "name": "Camera",
+  "slug": "camera",
+  "description": "High-quality DSLR camera",
+  "price": "999.99",
+  "sku": "CAM-001",
+  "is_active": true,
+  "images": [
+    {
+      "id": 1,
+      "product_id": 1,
+      "image_path": "products/1/front.jpg",
+      "image_url": "http://localhost:8000/storage/products/1/front.jpg",
+      "is_primary": true,
+      "created_at": "2026-06-04T10:30:00.000000Z",
+      "updated_at": "2026-06-04T10:30:00.000000Z"
+    },
+    {
+      "id": 2,
+      "product_id": 1,
+      "image_path": "products/1/side.jpg",
+      "image_url": "http://localhost:8000/storage/products/1/side.jpg",
+      "is_primary": false,
+      "created_at": "2026-06-04T10:30:00.000000Z",
+      "updated_at": "2026-06-04T10:30:00.000000Z"
+    }
+  ],
+  "category": { ... },
+  "variants": [ ... ]
+}
+```
+
+Required permission: `products.create` or `products.update`.
+
+#### Delete Product Image — Admin only
+```http
+DELETE /products/{product_id}/images/{image_id}
+Authorization: Bearer {admin_token}
+```
+
+Delete a single product image. If the deleted image was the primary image, no image is marked as primary until one is explicitly set.
+
+Response `204`: no content.
+
+Required permission: `products.delete`.
+
+#### Set Primary Product Image — Admin only
+```http
+PATCH /products/{product_id}/images/{image_id}/primary
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+```
+
+Mark a specific image as the primary/featured image for the product.
+
+Request:
+```json
+{
+  "is_primary": true
+}
+```
+
+Response `200`:
+```json
+{
+  "id": 1,
+  "product_id": 1,
+  "image_path": "products/1/front.jpg",
+  "image_url": "http://localhost:8000/storage/products/1/front.jpg",
+  "is_primary": true,
+  "created_at": "2026-06-04T10:30:00.000000Z",
+  "updated_at": "2026-06-04T10:30:00.000000Z"
+}
+```
+
+Required permission: `products.update`.
+
+#### Include Images When Creating Product
+You can optionally upload images at the same time you create a product:
+
+```http
+POST /products
+Authorization: Bearer {admin_token}
+Content-Type: multipart/form-data
+```
+
+Request:
+```
+Form fields:
+  - category_id: 1
+  - name: Laptop
+  - slug: laptop
+  - price: 999.99
+  - sku: LAP-001
+  - is_active: true
+
+Files:
+  - images[0]: <binary image data>
+  - images[1]: <binary image data>
+
+Optional:
+  - primary_image_index: 1 (which uploaded image should be primary)
+```
+
+The product is created with images in a single transaction. If `primary_image_index` is not provided, the first image becomes primary.
+
+---
+
 ### Category Endpoints
 
 #### List Categories
