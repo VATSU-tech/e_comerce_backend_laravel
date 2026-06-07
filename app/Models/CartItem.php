@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class CartItem extends Model
 {
@@ -11,8 +11,8 @@ class CartItem extends Model
 
     protected $fillable = [
         'cart_id',
-        'product_variant_id',
-        'quantity'
+        'product_id',
+        'quantity',
     ];
 
     public function cart()
@@ -20,8 +20,8 @@ class CartItem extends Model
         return $this->belongsTo(Cart::class);
     }
 
-    public function variant()
+    public function product()
     {
-        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+        return $this->belongsTo(Product::class);
     }
 }

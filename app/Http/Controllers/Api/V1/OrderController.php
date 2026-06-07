@@ -20,9 +20,7 @@ class OrderController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate(['total' => ['required', 'numeric', 'min:0']]);
-
-        return response()->json($this->orderService->createOrder((int) $request->user()->id, (float) $data['total']), 201);
+        return response()->json($this->orderService->createOrderFromCart((int) $request->user()->id), 201);
     }
 
     public function show(Request $request, int $id): JsonResponse

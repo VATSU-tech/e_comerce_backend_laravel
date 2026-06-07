@@ -61,6 +61,8 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/cart', [CartController::class, 'show']);
         Route::post('/cart/items', [CartController::class, 'addItem']);
+        Route::put('/cart/items/{item}', [CartController::class, 'updateItem']);
+        Route::delete('/cart/items/{item}', [CartController::class, 'removeItem']);
     });
 
     Route::post('/payments/webhook', [PaymentController::class, 'webhook']);
