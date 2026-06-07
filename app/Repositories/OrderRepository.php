@@ -14,12 +14,12 @@ class OrderRepository
 
     public function userOrders(int $userId): Collection
     {
-        return Order::query()->with(['status', 'items'])->where('user_id', $userId)->latest()->get();
+        return Order::query()->with(['status', 'items.product'])->where('user_id', $userId)->latest()->get();
     }
 
     public function findForUser(int $orderId, int $userId): Order
     {
-        return Order::query()->with(['status', 'items'])->where('user_id', $userId)->findOrFail($orderId);
+        return Order::query()->with(['status', 'items.product'])->where('user_id', $userId)->findOrFail($orderId);
     }
 
     public function updateStatus(Order $order, int $statusId): Order

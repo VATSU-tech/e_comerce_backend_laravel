@@ -672,7 +672,7 @@ e_comerce_backend_laravel/
                                 <tr>
                                     <td><code>products</code></td>
                                     <td>Product catalog</td>
-                                    <td>category, images, variants</td>
+                                    <td>category, images</td>
                                 </tr>
                                 <tr>
                                     <td><code>categories</code></td>
@@ -849,7 +849,7 @@ Response 200: Laravel paginated product collection.</pre>
                             <pre>GET /products/{id}
 Authorization: Optional
 
-Response 200: product with category, images and variants.</pre>
+Response 200: product with category, images.</pre>
                         </div>
 
                         <h4>Create Product — Admin only</h4>
@@ -1075,11 +1075,35 @@ Content-Type: application/json
 
 Request Body:
 {
-  "product_variant_id": 1,
+  "product_id": 3,
   "quantity": 2
 }
 
+No extra product option selection is required.
+
 Response 201: cart item JSON</pre>
+                        </div>
+
+                        <h4>Update Cart Item</h4>
+                        <div class="code-box">
+                            <pre>PUT /cart/items/{item_id}
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Request Body:
+{
+  "quantity": 3
+}
+
+Response 200: updated cart item JSON with product data</pre>
+                        </div>
+
+                        <h4>Remove Cart Item</h4>
+                        <div class="code-box">
+                            <pre>DELETE /cart/items/{item_id}
+Authorization: Bearer {token}
+
+Response 204: no content</pre>
                         </div>
 
                         <h3>Order Endpoints</h3>
@@ -1094,12 +1118,8 @@ Authorization: Bearer {token}</pre>
                         <div class="code-box">
                             <pre>POST /orders
 Authorization: Bearer {token}
-Content-Type: application/json
 
-Request Body:
-{
-  "total": 299.99
-}</pre>
+No request body is required. The order is created from the authenticated user's cart, item prices come from product.price, and the order total is calculated server-side.</pre>
                         </div>
 
                         <h4>Get Order</h4>
@@ -1520,7 +1540,7 @@ DB_PASSWORD=</pre>
 
                         <h3>Product Model</h3>
                         <p><strong>Namespace:</strong> <code>App\Models\Product</code></p>
-                        <p>Product catalog entity with variants, images, and inventory tracking.</p>
+                        <p>Product catalog entity with images and product-level inventory tracking.</p>
 
                         <h4>Attributes</h4>
                         <ul>
@@ -1538,7 +1558,6 @@ DB_PASSWORD=</pre>
                         <ul>
                             <li><code>category()</code> - Belongs-To Category</li>
                             <li><code>images()</code> - One-to-Many with ProductImage</li>
-                            <li><code>variants()</code> - One-to-Many with ProductVariant</li>
                         </ul>
 
                         <h3>Order Model</h3>
@@ -1570,7 +1589,6 @@ DB_PASSWORD=</pre>
                             <li><strong>Role</strong> - User role definitions</li>
                             <li><strong>Permission</strong> - System permissions</li>
                             <li><strong>Address</strong> - User delivery addresses</li>
-                            <li><strong>ProductVariant</strong> - Product variations</li>
                             <li><strong>OrderItem</strong> - Individual items in orders</li>
                             <li><strong>CartItem</strong> - Individual items in carts</li>
                         </ul>

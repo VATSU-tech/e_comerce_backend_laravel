@@ -24,7 +24,6 @@ class ProductRepository
                 'category',
                 'images' => fn ($query) => $query->orderByDesc('is_primary')->oldest(),
                 'primaryImage',
-                'variants',
             ])
             ->findOrFail($id);
     }

@@ -97,7 +97,6 @@ e_comerce_backend_laravel/
 │   │   ├── Cart.php
 │   │   ├── Payment.php
 │   │   ├── Category.php
-│   │   ├── ProductVariant.php
 │   │   ├── Inventory.php
 │   │   ├── Shipment.php
 │   │   └── ... (additional models)
@@ -221,132 +220,6 @@ product_images
 └── updated_at (Timestamp)
 ```
 
-#### Product Variants Table
-```
-product_variants
-├── id (Primary Key)
-├── product_id (Foreign Key → products)
-├── name (String)
-├── sku (String)
-├── price (Decimal 8,2, Nullable)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Inventories Table
-```
-inventories
-├── id (Primary Key)
-├── product_id (Foreign Key → products)
-├── quantity (Integer)
-├── reserved_quantity (Integer)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Stock Movements Table
-```
-stock_movements
-├── id (Primary Key)
-├── inventory_id (Foreign Key → inventories)
-├── movement_type (Enum: IN, OUT)
-├── quantity (Integer)
-├── reference_type (String)
-├── reference_id (Integer)
-├── notes (Text, Nullable)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Carts Table
-```
-carts
-├── id (Primary Key)
-├── user_id (Foreign Key → users)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Cart Items Table
-```
-cart_items
-├── id (Primary Key)
-├── cart_id (Foreign Key → carts)
-├── product_id (Foreign Key → products)
-├── quantity (Integer)
-├── price (Decimal 10,2)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Order Statuses Table
-```
-order_statuses
-├── id (Primary Key)
-├── name (String)
-├── slug (String)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Orders Table
-```
-orders
-├── id (Primary Key)
-├── user_id (Foreign Key → users)
-├── order_status_id (Foreign Key → order_statuses)
-├── total (Decimal 10,2)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Order Items Table
-```
-order_items
-├── id (Primary Key)
-├── order_id (Foreign Key → orders)
-├── product_id (Foreign Key → products)
-├── quantity (Integer)
-├── price (Decimal 10,2)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Payment Methods Table
-```
-payment_methods
-├── id (Primary Key)
-├── name (String)
-├── code (String)
-├── is_active (Boolean)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Payments Table
-```
-payments
-├── id (Primary Key)
-├── order_id (Foreign Key → orders)
-├── payment_method_id (Foreign Key → payment_methods)
-├── amount (Decimal 10,2)
-├── status (Enum: PENDING, COMPLETED, FAILED)
-├── transaction_id (String, Nullable)
-├── reference_code (String)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
-#### Shipment Statuses Table
-```
-shipment_statuses
-├── id (Primary Key)
-├── name (String)
-├── slug (String)
-├── created_at (Timestamp)
-└── updated_at (Timestamp)
-```
-
 #### Shipments Table
 ```
 shipments
@@ -364,7 +237,6 @@ shipments
 - **role_user:** Links users with roles (Many-to-Many)
 - **permission_role:** Links roles with permissions (Many-to-Many)
 - **permission_user:** Links users with permissions (Many-to-Many)
-- **product_variant_value_pivot:** Links product variants with variant values
 
 ---
 
@@ -569,7 +441,6 @@ Response `200`:
   "is_active": true,
   "category": {},
   "images": [],
-  "variants": []
 }
 ```
 
@@ -679,7 +550,6 @@ Response `201`:
     }
   ],
   "category": { ... },
-  "variants": [ ... ]
 }
 ```
 
@@ -851,9 +721,11 @@ GET /cart
 Authorization: Bearer {token}
 ```
 
-Response `200`: cart JSON with `items`.
+Response `200`: cart JSON with `items`, each linked to a simple product, plus the product-based total.
 
 #### Add to Cart
+Send the simple product identifier directly; no extra product option is required.
+
 ```http
 POST /cart/items
 Authorization: Bearer {token}
@@ -863,12 +735,36 @@ Content-Type: application/json
 Request:
 ```json
 {
-  "product_variant_id": 1,
+  "product_id": 3,
   "quantity": 2
 }
 ```
 
-Response `201`: cart item JSON.
+Response `201`: cart item JSON with `product_id` and the loaded product.
+
+#### Update Cart Item
+```http
+PUT /cart/items/{item_id}
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+Request:
+```json
+{
+  "quantity": 3
+}
+```
+
+Response `200`: updated cart item JSON with the loaded product.
+
+#### Remove Cart Item
+```http
+DELETE /cart/items/{item_id}
+Authorization: Bearer {token}
+```
+
+Response `204`: no content.
 
 ### Order Endpoints
 
@@ -884,17 +780,11 @@ Response `200`: authenticated user's orders.
 ```http
 POST /orders
 Authorization: Bearer {token}
-Content-Type: application/json
 ```
 
-Request:
-```json
-{
-  "total": 299.99
-}
-```
+No request body is required. The order is created from the authenticated user's cart, item prices come from `product.price`, the order total is calculated server-side, and the cart is emptied after creation.
 
-Response `201`: order JSON.
+Response `201`: order JSON with product-based items.
 
 #### Get Order Details
 ```http
@@ -1238,7 +1128,6 @@ CACHE_DRIVER=file
 **Relations:**
 - `category()` - Belongs-To Category
 - `images()` - One-to-Many with ProductImage
-- `variants()` - One-to-Many with ProductVariant
 
 **Casts:**
 - is_active → Boolean
@@ -1286,7 +1175,6 @@ CACHE_DRIVER=file
 - **Role** - User roles for permission system
 - **Permission** - System permissions
 - **Address** - User delivery addresses
-- **ProductVariant** - Product variations (size, color, etc.)
 - **OrderItem** - Individual items in orders
 - **CartItem** - Individual items in shopping carts
 
